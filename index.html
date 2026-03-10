@@ -1225,9 +1225,11 @@ function clearAllData() {
 
 // ==================== INIT ====================
 loadLocal();
-renderRecipes();
-renderCalendar();
-renderPantryList();
+syncData().then(() => {
+  renderRecipes();
+  renderCalendar();
+  renderPantryList();
+});
 </script>
 </body>
 </html>
