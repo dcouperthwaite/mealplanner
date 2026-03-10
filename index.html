@@ -1001,7 +1001,6 @@ function buildShoppingList() {
     if (!catItems.length) html += `<p style="font-size:0.8rem;color:var(--brown-light);padding:0.25rem 0.75rem;">No items</p>`;
     copyLines.push(`${getCatEmoji(cat)} ${cat.toUpperCase()}`);
     catItems.forEach(item => {
-    catItems.forEach(item => {
       const ck = item.name.toLowerCase().trim();
       const checked = state.checkedItems[ck];
       html += `<div class="shopping-item ${checked ? 'checked' : ''}"
@@ -1015,7 +1014,7 @@ function buildShoppingList() {
           <button class="shopping-item-remove" onclick="removeShoppingItem('${ck}')" title="Remove">×</button>
         </div>`;
     });
-    html += `</div></div>`;
+    html += `</div>`;
   });
 
   mainEl.innerHTML = html;
