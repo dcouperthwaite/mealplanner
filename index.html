@@ -999,9 +999,8 @@ function buildShoppingList() {
   Object.entries(categorized).forEach(([cat, catItems]) => {
     html += `<div class="shopping-category"><div class="shopping-category-title">${getCatEmoji(cat)} ${cat}</div>`;
     if (!catItems.length) html += `<p style="font-size:0.8rem;color:var(--brown-light);padding:0.25rem 0.75rem;">No items</p>`;
-      <div class="shopping-category-title">${getCatEmoji(cat)} ${cat}</div>
-      <div class="shopping-items-container" data-category="${cat}"
-        ondragover="onDragOver(event)" ondragleave="onDragLeave(event)" ondrop="onDrop(event, '${cat}')">`;
+    copyLines.push(`${getCatEmoji(cat)} ${cat.toUpperCase()}`);
+    catItems.forEach(item => {
     catItems.forEach(item => {
       const ck = item.name.toLowerCase().trim();
       const checked = state.checkedItems[ck];
