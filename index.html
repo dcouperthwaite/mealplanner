@@ -441,7 +441,8 @@
           <div class="sidebar-card-title">📋 Copy List</div>
           <p style="font-size:0.8rem;color:var(--brown-light);margin-bottom:0.6rem;">Copy your list to paste anywhere.</p>
           <textarea class="copy-area" id="copy-text" readonly></textarea>
-          <button class="btn btn-primary" style="width:100%;margin-top:0.6rem;justify-content:center;" onclick="copyList()">Copy to Clipboard</button>
+      <button class="btn btn-primary" style="width:100%;margin-top:0.6rem;justify-content:center;" onclick="copyList()">Copy to Clipboard</button>
+      <button class="btn btn-ghost" style="width:100%;margin-top:0.5rem;justify-content:center;" onclick="clearChecked()">Clear Checked Items</button>
         </div>
         <div class="sidebar-card">
           <div class="sidebar-card-title">🌿 Pantry Staples</div>
@@ -996,8 +997,8 @@ function buildShoppingList() {
 
   let html = '';
   Object.entries(categorized).forEach(([cat, catItems]) => {
-    if (!catItems.length) return;
-    html += `<div class="shopping-category" data-category="${cat}">
+    html += `<div class="shopping-category"><div class="shopping-category-title">${getCatEmoji(cat)} ${cat}</div>`;
+    if (!catItems.length) html += `<p style="font-size:0.8rem;color:var(--brown-light);padding:0.25rem 0.75rem;">No items</p>`;
       <div class="shopping-category-title">${getCatEmoji(cat)} ${cat}</div>
       <div class="shopping-items-container" data-category="${cat}"
         ondragover="onDragOver(event)" ondragleave="onDragLeave(event)" ondrop="onDrop(event, '${cat}')">`;
@@ -1103,6 +1104,12 @@ function addManualItem() {
   saveLocal(); syncRemote();
   buildShoppingList();
   toast(`${name} added to list!`);
+}
+function clearChecked() {
+  state.checkedItems = {};
+  saveLocal();
+  buildShoppingList();
+  toast('Checked items cleared!');
 }
 
 function toggleShoppingItem(key, checked) {
