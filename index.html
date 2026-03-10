@@ -1032,9 +1032,17 @@ async function syncData() {
   toast('Syncing…');
   try {
     const res = await fetch(`${state.settings.workerUrl}?binId=${state.settings.binId}`);
-    const remote = await res.json();
-    if (remote.recipes) { state = { ...state, ...remote }; saveLocal(); renderRecipes(); toast('Synced! ✓'); }
-  } catch(e) { toast('Sync failed. Check your settings.'); }
+    if (!res.ok) { toast('Sync failed. Status: ' + res.status); return; }
+    let remote = await res.json();
+    if (remote.record) remote = remote.record;
+    if (remote.recipes !== undefined) {
+      state = { ...state, ...remote, settings: state.settings };
+      saveLocal(); renderRecipes(); renderCalendar(); toast('Synced! ✓');
+    } else {
+      toast('Sync failed — unexpected data.');
+      console.warn('Unexpected sync response:', remote);
+    }
+  } catch(e) { toast('Sync failed: ' + e.message); console.error(e); }
 }
 function exportData() {
   const blob = new Blob([JSON.stringify(state, null, 2)], { type: 'application/json' });
