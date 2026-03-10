@@ -1020,7 +1020,7 @@ function saveSettings() {
 async function syncRemote() {
   if (!state.settings?.workerUrl || !state.settings?.binId) return;
   try {
-    await fetch(`${state.settings.workerUrl}?binId=${state.settings.binId}`, {
+    await fetch(`https://mealplanner.dcouperthwaite123.workers.dev?binId=69b00347ff3f7076473eccd1`, {
       method: 'PUT',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ binId: state.settings.binId, data: state })
