@@ -996,7 +996,8 @@ function buildShoppingList() {
   }
 
   let html = '';
-  let copyLines = ['🛒 Shopping List', ''];  Object.entries(categorized).forEach(([cat, catItems]) => {
+  let copyLines = ['🛒 Shopping List', ''];  
+  Object.entries(categorized).forEach(([cat, catItems]) => {
     html += `<div class="shopping-category"><div class="shopping-category-title">${getCatEmoji(cat)} ${cat}</div>`;
     html += `<div class="shopping-items-container" ondragover="onDragOver(event)" ondragleave="onDragLeave(event)" ondrop="onDrop(event, '${cat}')">`;
     if (!catItems.length) html += `<p style="font-size:0.8rem;color:var(--brown-light);padding:0.25rem 0.75rem;font-style:italic;">No items — drag here to add</p>`;
