@@ -1020,7 +1020,7 @@ function saveSettings() {
 async function syncRemote() {
   if (!state.settings?.workerUrl || !state.settings?.binId) return;
   try {
-    await fetch(state.settings.workerUrl, {
+    await fetch(`${state.settings.workerUrl}?binId=${state.settings.binId}`, {
       method: 'PUT',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ binId: state.settings.binId, data: state })
