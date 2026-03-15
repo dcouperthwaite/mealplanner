@@ -407,8 +407,13 @@
 
   <!-- ==================== SHOPPING PAGE ==================== -->
   <div class="page" id="page-shopping">
-    <h1 class="page-title">Shopping List</h1>
-    <p class="page-subtitle">Generated from your meal plan. Check off as you shop!</p>
+    <div style="display:flex;justify-content:space-between;align-items:flex-end;margin-bottom:0.25rem;flex-wrap:wrap;gap:1rem;">
+      <div>
+        <h1 class="page-title">Shopping List</h1>
+        <p class="page-subtitle">Check off as you shop, or regenerate from your meal plan.</p>
+      </div>
+      <button class="btn btn-primary" onclick="generateShoppingList()">↺ Generate from Meal Plan</button>
+    </div>
     <div class="shopping-layout">
       <div id="shopping-main"></div>
       <div>
@@ -443,6 +448,7 @@
           <textarea class="copy-area" id="copy-text" readonly></textarea>
       <button class="btn btn-primary" style="width:100%;margin-top:0.6rem;justify-content:center;" onclick="copyList()">Copy to Clipboard</button>
       <button class="btn btn-ghost" style="width:100%;margin-top:0.5rem;justify-content:center;" onclick="clearChecked()">Clear Checked Items</button>
+      <button class="btn btn-danger" style="width:100%;margin-top:0.5rem;justify-content:center;" onclick="clearFullList()">🗑 Clear Full List</button>
         </div>
         <div class="sidebar-card">
           <div class="sidebar-card-title">🌿 Pantry Staples</div>
@@ -589,8 +595,7 @@ let state = {
   mealPlan: {}, // key: "YYYY-MM-DD-meal" => recipeId
   pantry: ['salt', 'pepper', 'olive oil', 'sugar', 'flour'],
   settings: { workerUrl: '', binId: '' },
-  hiddenItems: [],
-  checkedItems: {}
+  shoppingList: [] // { name, amount, unit, category, checked, manual }
 };
 
 const ALL_TAGS = ['Quick', 'Low Cal', 'Pasta', 'Chicken', 'Beef', 'Pork', 'Fish', 'Soup', 'Salad', 'Baking', 'Breakfast', 'Drinks', 'Comfort Food'];
@@ -621,8 +626,7 @@ function saveLocal() {
 function loadLocal() {
   const s = localStorage.getItem('hearth-state');
   if (s) { try { state = { ...state, ...JSON.parse(s) }; } catch(e) {} }
-  if (!state.manualItems) state.manualItems = [];
-  if (!state.categoryOverrides) state.categoryOverrides = {};
+  if (!state.shoppingList) state.shoppingList = [];
 }
 
 // ==================== UTILITIES ====================
@@ -908,16 +912,9 @@ function removeMeal(dateStr, mealType) {
 }
 
 // ==================== SHOPPING LIST ====================
-// Manual items: { id, name, amount, unit, category }
-if (!state.manualItems) state.manualItems = [];
-// Item category overrides: { itemKey: categoryName }
-if (!state.categoryOverrides) state.categoryOverrides = {};
-
-function buildShoppingList() {
-  if (!state.manualItems) state.manualItems = [];
-  if (!state.categoryOverrides) state.categoryOverrides = {};
-
-  // Collect all recipes in the current week's meal plan
+// Generate a fresh shopping list from the current week's meal plan and save to state
+function generateShoppingList() {
+  if (!confirm('Regenerate the shopping list from this week\'s meal plan? Any manual edits will be lost.')) return;
   const usedRecipeIds = new Set();
   for (let i = 0; i < 7; i++) {
     const date = addDays(currentWeekStart, i);
@@ -927,7 +924,6 @@ function buildShoppingList() {
     });
   }
 
-  // Aggregate ingredients
   const aggregate = {};
   usedRecipeIds.forEach(rid => {
     const r = state.recipes.find(x => x.id === rid);
@@ -935,8 +931,9 @@ function buildShoppingList() {
     r.ingredients.forEach(ing => {
       if (!ing.name) return;
       const key = ing.name.toLowerCase().trim();
-      if (!aggregate[key]) aggregate[key] = { name: ing.name, amount: ing.amount, unit: ing.unit, count: 0, manual: false };
-      else {
+      if (!aggregate[key]) {
+        aggregate[key] = { name: ing.name, amount: ing.amount, unit: ing.unit };
+      } else {
         if (ing.amount && aggregate[key].amount) {
           const n1 = parseFloat(aggregate[key].amount), n2 = parseFloat(ing.amount);
           if (!isNaN(n1) && !isNaN(n2) && aggregate[key].unit === ing.unit) {
@@ -946,79 +943,63 @@ function buildShoppingList() {
           }
         } else if (ing.amount) aggregate[key].amount = ing.amount;
       }
-      aggregate[key].count++;
     });
   });
 
-  // Filter out pantry items
+  // Filter pantry items
   const pantryActive = state.pantry || [];
-  const recipeItems = Object.values(aggregate).filter(item => {
-    const name = item.name.toLowerCase();
-    return !pantryActive.some(p => name.includes(p.toLowerCase()));
-  });
+  const items = Object.values(aggregate).filter(item =>
+    !pantryActive.some(p => item.name.toLowerCase().includes(p.toLowerCase()))
+  );
 
-  // Filter hidden items
-  const hiddenItems = state.hiddenItems || [];
-  const filteredItems = recipeItems.filter(item => !hiddenItems.includes(item.name.toLowerCase().trim()));
-
-  // Merge manual items (avoid duplicates with recipe items)
-  const allItems = [...filteredItems];
-  state.manualItems.forEach(mi => {
-    const key = mi.name.toLowerCase().trim();
-    if (!aggregate[key]) allItems.push({ ...mi, manual: true });
-  });
-
-  // Categorize — respect overrides
-  const categorized = {};
-  Object.keys(CATEGORIES).forEach(c => categorized[c] = []);
-  allItems.forEach(item => {
+  // Assign categories
+  state.shoppingList = items.map(item => {
     const key = item.name.toLowerCase().trim();
-    const override = state.categoryOverrides[key];
-    if (override && categorized[override] !== undefined) {
-      categorized[override].push(item); return;
-    }
-    // Manual items use their own category
-    if (item.manual && item.category && categorized[item.category] !== undefined) {
-      categorized[item.category].push(item); return;
-    }
-    let assigned = false;
+    let category = 'Other';
     for (const [cat, keywords] of Object.entries(CATEGORIES)) {
       if (cat === 'Other') continue;
-      if (keywords.some(k => key.includes(k))) {
-        categorized[cat].push(item); assigned = true; break;
-      }
+      if (keywords.some(k => key.includes(k))) { category = cat; break; }
     }
-    if (!assigned) categorized['Other'].push(item);
+    return { ...item, category, checked: false, manual: false };
   });
 
-  const mainEl = document.getElementById('shopping-main');
-  const hasItems = allItems.length > 0;
+  saveLocal(); syncRemote();
+  renderShoppingList();
+  toast('Shopping list generated!');
+}
 
-  if (!hasItems && usedRecipeIds.size === 0) {
-    mainEl.innerHTML = `<div class="empty-state"><div class="empty-state-icon">🛒</div><div class="empty-state-text">Your shopping list is empty</div><div class="empty-state-sub">Add recipes to your meal plan or add items manually!</div></div>`;
+// Render the shopping list from state.shoppingList
+function renderShoppingList() {
+  if (!state.shoppingList) state.shoppingList = [];
+  const mainEl = document.getElementById('shopping-main');
+
+  if (!state.shoppingList.length) {
+    mainEl.innerHTML = `<div class="empty-state"><div class="empty-state-icon">🛒</div><div class="empty-state-text">Your shopping list is empty</div><div class="empty-state-sub">Click "Generate from Meal Plan" or add items manually!</div></div>`;
     document.getElementById('copy-text').value = '';
+    renderPantryList();
     return;
   }
 
+  // Group by category
+  const categorized = {};
+  Object.keys(CATEGORIES).forEach(c => categorized[c] = []);
+  state.shoppingList.forEach(item => {
+    if (categorized[item.category] !== undefined) categorized[item.category].push(item);
+    else categorized['Other'].push(item);
+  });
+
   let html = '';
-  let copyLines = ['🛒 Shopping List', ''];  
   Object.entries(categorized).forEach(([cat, catItems]) => {
     html += `<div class="shopping-category" data-category="${cat}"><div class="shopping-category-title">${getCatEmoji(cat)} ${cat}</div>`;
-    html += `<div class="shopping-items-container" ondragover="onDragOver(event)" ondragleave="onDragLeave(event)" ondrop="onDrop(event, '${cat}')">`;
-    if (!catItems.length) html += `<p style="font-size:0.8rem;color:var(--brown-light);padding:0.25rem 0.75rem;font-style:italic;">No items — drag here to add</p>`;
-    copyLines.push(`${getCatEmoji(cat)} ${cat.toUpperCase()}`);
-    catItems.forEach(item => {
-      const ck = item.name.toLowerCase().trim();
-      const checked = state.checkedItems[ck];
-      html += `<div class="shopping-item ${checked ? 'checked' : ''}"
-          draggable="true"
-          data-item-key="${ck}"
-          ondragstart="onDragStart(event, '${ck}')">
-          <span class="drag-handle" title="Drag to move">⠿</span>
-          <input type="checkbox" ${checked?'checked':''} onchange="toggleShoppingItem('${ck}', this.checked)" onclick="event.stopPropagation()"/>
+    html += `<div class="shopping-items-container">`;
+    if (!catItems.length) html += `<p style="font-size:0.8rem;color:var(--brown-light);padding:0.25rem 0.75rem;font-style:italic;">No items</p>`;
+    catItems.forEach((item, idx) => {
+      const globalIdx = state.shoppingList.indexOf(item);
+      html += `<div class="shopping-item ${item.checked ? 'checked' : ''}" data-item-key="${globalIdx}">
+          <input type="checkbox" ${item.checked?'checked':''} onchange="toggleShoppingItem(${globalIdx}, this.checked)" onclick="event.stopPropagation()"/>
           <span class="shopping-item-text">${item.name}${item.manual ? ' <span style=\"font-size:0.7rem;color:var(--brown-light)\">(manual)</span>' : ''}</span>
           ${item.amount ? `<span class="shopping-amount">${item.amount}${item.unit?' '+item.unit:''}</span>` : ''}
-          <button class="shopping-item-remove" onclick="removeShoppingItem('${ck}')" title="Remove">×</button>
+          <button class="shopping-item-remove" onclick="removeShoppingItem(${globalIdx})" title="Remove">×</button>
         </div>`;
     });
     html += `</div></div>`;
@@ -1029,102 +1010,80 @@ function buildShoppingList() {
   renderPantryList();
 }
 
+// Keep buildShoppingList as an alias so nav still works
+function buildShoppingList() { renderShoppingList(); }
+
 function getCatEmoji(cat) {
   const map = {'Produce':'🥦','Meat & Fish':'🥩','Dairy & Eggs':'🥛','Bakery & Grains':'🍞','Canned & Pantry':'🥫','Spices & Condiments':'🧂','Drinks':'🥤','Frozen':'❄️','Other':'📦'};
   return map[cat] || '📦';
 }
 
 function updateCopyText() {
-  const cats = document.querySelectorAll('.shopping-category');
+  if (!state.shoppingList || !state.shoppingList.length) {
+    document.getElementById('copy-text').value = '';
+    return;
+  }
+  const categorized = {};
+  Object.keys(CATEGORIES).forEach(c => categorized[c] = []);
+  state.shoppingList.filter(i => !i.checked).forEach(item => {
+    if (categorized[item.category] !== undefined) categorized[item.category].push(item);
+    else categorized['Other'].push(item);
+  });
   let lines = ['🛒 Shopping List', ''];
-  cats.forEach(catEl => {
-    const cat = catEl.dataset.category;
-    const items = catEl.querySelectorAll('.shopping-item:not(.checked)');
+  Object.entries(categorized).forEach(([cat, items]) => {
     if (!items.length) return;
     lines.push(`${getCatEmoji(cat)} ${cat.toUpperCase()}`);
-    items.forEach(el => {
-      const name = el.querySelector('.shopping-item-text').textContent.replace('(manual)','').trim();
-      const amt = el.querySelector('.shopping-amount')?.textContent || '';
-      lines.push(`  • ${name}${amt ? ' — ' + amt : ''}`);
+    items.forEach(item => {
+      lines.push(`  • ${item.name}${item.amount ? ' — ' + item.amount + (item.unit ? ' ' + item.unit : '') : ''}`);
     });
     lines.push('');
   });
   document.getElementById('copy-text').value = lines.join('\n');
 }
 
-// ── Drag and drop ──
-let draggedItemKey = null;
-function onDragStart(event, itemKey) {
-  draggedItemKey = itemKey;
-  event.dataTransfer.effectAllowed = 'move';
-  setTimeout(() => { const el = document.querySelector(`[data-item-key="${itemKey}"]`); if(el) el.classList.add('dragging'); }, 0);
-}
-function onDragOver(event) {
-  event.preventDefault();
-  event.dataTransfer.dropEffect = 'move';
-  event.currentTarget.classList.add('drag-over');
-}
-function onDragLeave(event) {
-  event.currentTarget.classList.remove('drag-over');
-}
-function onDrop(event, targetCat) {
-  event.preventDefault();
-  event.currentTarget.classList.remove('drag-over');
-  if (!draggedItemKey) return;
-  // Save the override
-  if (!state.categoryOverrides) state.categoryOverrides = {};
-  state.categoryOverrides[draggedItemKey] = targetCat;
-  // Also update manual item category if it's a manual item
-  if (state.manualItems) {
-    const mi = state.manualItems.find(i => i.name.toLowerCase().trim() === draggedItemKey);
-    if (mi) mi.category = targetCat;
-  }
-  draggedItemKey = null;
+function removeShoppingItem(idx) {
+  state.shoppingList.splice(idx, 1);
   saveLocal(); syncRemote();
-  buildShoppingList();
-}
-
-function removeShoppingItem(key) {
-  // Remove manual item if it exists
-  if (state.manualItems) state.manualItems = state.manualItems.filter(i => i.name.toLowerCase().trim() !== key);
-  // Remove override
-  if (state.categoryOverrides) delete state.categoryOverrides[key];
-  // Hide recipe-derived items
-  if (!state.hiddenItems) state.hiddenItems = [];
-  if (!state.hiddenItems.includes(key)) state.hiddenItems.push(key);
-  saveLocal(); syncRemote();
-  buildShoppingList();
+  renderShoppingList();
 }
 
 function addManualItem() {
   const name = document.getElementById('manual-item-name').value.trim();
   if (!name) { toast('Please enter an item name'); return; }
-  if (!state.manualItems) state.manualItems = [];
+  if (!state.shoppingList) state.shoppingList = [];
   const amount = document.getElementById('manual-item-amount').value.trim();
   const unit = document.getElementById('manual-item-unit').value.trim();
   const category = document.getElementById('manual-item-cat').value;
   // Avoid duplicates
-  state.manualItems = state.manualItems.filter(i => i.name.toLowerCase().trim() !== name.toLowerCase().trim());
-  state.manualItems.push({ id: uid(), name, amount, unit, category, manual: true });
+  state.shoppingList = state.shoppingList.filter(i => i.name.toLowerCase().trim() !== name.toLowerCase().trim());
+  state.shoppingList.push({ name, amount, unit, category, checked: false, manual: true });
   document.getElementById('manual-item-name').value = '';
   document.getElementById('manual-item-amount').value = '';
   document.getElementById('manual-item-unit').value = '';
   saveLocal(); syncRemote();
-  buildShoppingList();
+  renderShoppingList();
   toast(`${name} added to list!`);
 }
 function clearChecked() {
-  state.checkedItems = {};
-  state.hiddenItems = [];
-  saveLocal();
-  buildShoppingList();
-  toast('List reset!');
+  if (!state.shoppingList) return;
+  state.shoppingList.forEach(i => i.checked = false);
+  saveLocal(); syncRemote();
+  renderShoppingList();
+  toast('Checked items cleared!');
 }
 
-function toggleShoppingItem(key, checked) {
-  if (checked) state.checkedItems[key] = true;
-  else delete state.checkedItems[key];
-  const row = document.querySelector(`[data-item-key="${key}"]`);
+function clearFullList() {
+  if (!confirm('Clear the full shopping list?')) return;
+  state.shoppingList = [];
+  saveLocal(); syncRemote();
+  renderShoppingList();
+  toast('Shopping list cleared!');
+}
+
+function toggleShoppingItem(idx, checked) {
+  if (!state.shoppingList || !state.shoppingList[idx]) return;
+  state.shoppingList[idx].checked = checked;
+  const row = document.querySelector(`[data-item-key="${idx}"]`);
   if (row) row.classList.toggle('checked', checked);
   updateCopyText();
   saveLocal();
@@ -1228,7 +1187,7 @@ function handleImport(e) {
 }
 function clearAllData() {
   if (!confirm('Clear ALL data? This cannot be undone.')) return;
-  state = { recipes: [], mealPlan: {}, pantry: ['salt','pepper','olive oil','sugar','flour'], settings: state.settings, checkedItems: {} };
+  state = { recipes: [], mealPlan: {}, pantry: ['salt','pepper','olive oil','sugar','flour'], settings: state.settings, shoppingList: [] };
   saveLocal(); renderRecipes(); toast('Data cleared.');
 }
 
