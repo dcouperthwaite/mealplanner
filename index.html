@@ -589,6 +589,7 @@ let state = {
   mealPlan: {}, // key: "YYYY-MM-DD-meal" => recipeId
   pantry: ['salt', 'pepper', 'olive oil', 'sugar', 'flour'],
   settings: { workerUrl: '', binId: '' },
+  hiddenItems: [],
   checkedItems: {}
 };
 
@@ -956,8 +957,12 @@ function buildShoppingList() {
     return !pantryActive.some(p => name.includes(p.toLowerCase()));
   });
 
+  // Filter hidden items
+  const hiddenItems = state.hiddenItems || [];
+  const filteredItems = recipeItems.filter(item => !hiddenItems.includes(item.name.toLowerCase().trim()));
+
   // Merge manual items (avoid duplicates with recipe items)
-  const allItems = [...recipeItems];
+  const allItems = [...filteredItems];
   state.manualItems.forEach(mi => {
     const key = mi.name.toLowerCase().trim();
     if (!aggregate[key]) allItems.push({ ...mi, manual: true });
@@ -998,7 +1003,7 @@ function buildShoppingList() {
   let html = '';
   let copyLines = ['🛒 Shopping List', ''];  
   Object.entries(categorized).forEach(([cat, catItems]) => {
-    html += `<div class="shopping-category"><div class="shopping-category-title">${getCatEmoji(cat)} ${cat}</div>`;
+    html += `<div class="shopping-category" data-category="${cat}"><div class="shopping-category-title">${getCatEmoji(cat)} ${cat}</div>`;
     html += `<div class="shopping-items-container" ondragover="onDragOver(event)" ondragleave="onDragLeave(event)" ondrop="onDrop(event, '${cat}')">`;
     if (!catItems.length) html += `<p style="font-size:0.8rem;color:var(--brown-light);padding:0.25rem 0.75rem;font-style:italic;">No items — drag here to add</p>`;
     copyLines.push(`${getCatEmoji(cat)} ${cat.toUpperCase()}`);
@@ -1084,6 +1089,9 @@ function removeShoppingItem(key) {
   if (state.manualItems) state.manualItems = state.manualItems.filter(i => i.name.toLowerCase().trim() !== key);
   // Remove override
   if (state.categoryOverrides) delete state.categoryOverrides[key];
+  // Hide recipe-derived items
+  if (!state.hiddenItems) state.hiddenItems = [];
+  if (!state.hiddenItems.includes(key)) state.hiddenItems.push(key);
   saveLocal(); syncRemote();
   buildShoppingList();
 }
@@ -1107,9 +1115,10 @@ function addManualItem() {
 }
 function clearChecked() {
   state.checkedItems = {};
+  state.hiddenItems = [];
   saveLocal();
   buildShoppingList();
-  toast('Checked items cleared!');
+  toast('List reset!');
 }
 
 function toggleShoppingItem(key, checked) {
