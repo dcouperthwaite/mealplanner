@@ -401,7 +401,7 @@
     </div>
     <div class="calendar-grid" id="calendar-grid"></div>
     <div style="margin-top:1.5rem; text-align:right;">
-      <button class="btn btn-sage" onclick="showPage('shopping')">Generate Shopping List →</button>
+      <button class="btn btn-sage" onclick="generateShoppingList()">Generate Shopping List →</button>
     </div>
   </div>
 
@@ -1066,7 +1066,7 @@ function addManualItem() {
 }
 function clearChecked() {
   if (!state.shoppingList) return;
-  state.shoppingList.forEach(i => i.checked = false);
+  state.shoppingList = state.shoppingList.filter(i => !i.checked);
   saveLocal(); syncRemote();
   renderShoppingList();
   toast('Checked items cleared!');
